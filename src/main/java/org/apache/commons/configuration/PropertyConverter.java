@@ -29,14 +29,7 @@ import java.net.URL;
 import java.net.UnknownHostException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.commons.lang.StringUtils;
@@ -73,6 +66,8 @@ public final class PropertyConverter
 
     /** The fully qualified name of {@link javax.mail.internet.InternetAddress} */
     private static final String INTERNET_ADDRESS_CLASSNAME = "javax.mail.internet.InternetAddress";
+
+    private static final int MAX_FLATTEN_DEPTH = 50; // configurable max depth
 
     /**
      * Private constructor prevents instances from being created.
@@ -969,39 +964,41 @@ public final class PropertyConverter
      * @return a &quot;flat&quot; collection containing all primitive values of
      *         the passed in object
      */
-    private static Collection<?> flatten(Object value, char delimiter)
-    {
-        if (value instanceof String)
-        {
-            String s = (String) value;
-            if (s.indexOf(delimiter) > 0)
-            {
-                return split(s, delimiter);
-            }
+    private static Collection<?> flatten(Object value, char delimiter) {
+        return flatten(value, delimiter, new IdentityHashMap<>(), MAX_FLATTEN_DEPTH);
+    }
+
+    private static Collection<?> flatten(Object value, char delimiter,
+                                         IdentityHashMap<Object, Boolean> visited, int depth) {
+        if (value == null || depth <= 0) {
+            return List.of(); // stop recursion if null or max depth reached
         }
 
-        Collection<Object> result = new LinkedList<Object>();
-        if (value instanceof Iterable)
-        {
-            flattenIterator(result, ((Iterable<?>) value).iterator(), delimiter);
+        // Prevent cycles
+        if (visited.containsKey(value)) {
+            return List.of();
         }
-        else if (value instanceof Iterator)
-        {
-            flattenIterator(result, (Iterator<?>) value, delimiter);
-        }
-        else if (value != null)
-        {
-            if (value.getClass().isArray())
-            {
-                for (int len = Array.getLength(value), idx = 0; idx < len; idx++)
-                {
-                    result.addAll(flatten(Array.get(value, idx), delimiter));
-                }
+        visited.put(value, Boolean.TRUE);
+
+        Collection<Object> result = new LinkedList<>();
+
+        if (value instanceof String s) {
+            if (s.indexOf(delimiter) >= 0) {
+                result.addAll(split(s, delimiter));
+            } else {
+                result.add(s);
             }
-            else
-            {
-                result.add(value);
+        } else if (value instanceof Iterable<?> it) {
+            flattenIterator(result, it.iterator(), delimiter, visited, depth - 1);
+        } else if (value instanceof Iterator<?> it) {
+            flattenIterator(result, it, delimiter, visited, depth - 1);
+        } else if (value.getClass().isArray()) {
+            int len = Array.getLength(value);
+            for (int i = 0; i < len; i++) {
+                result.addAll(flatten(Array.get(value, i), delimiter, visited, depth - 1));
             }
+        } else {
+            result.add(value);
         }
 
         return result;
@@ -1015,11 +1012,10 @@ public final class PropertyConverter
      * @param it the iterator to process
      * @param delimiter the delimiter for String values
      */
-    private static void flattenIterator(Collection<Object> target, Iterator<?> it, char delimiter)
-    {
-        while (it.hasNext())
-        {
-            target.addAll(flatten(it.next(), delimiter));
+    private static void flattenIterator(Collection<Object> target, Iterator<?> it,
+                                        char delimiter, IdentityHashMap<Object, Boolean> visited, int depth) {
+        while (it.hasNext()) {
+            target.addAll(flatten(it.next(), delimiter, visited, depth));
         }
     }
 

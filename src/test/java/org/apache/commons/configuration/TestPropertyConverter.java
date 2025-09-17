@@ -23,7 +23,10 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.lang.annotation.ElementType;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -386,5 +389,29 @@ public class TestPropertyConverter
     public void testToCharFailed()
     {
         PropertyConverter.to(Character.TYPE, "FF", null);
+    }
+
+    @Test
+    public void testRecursiveStructureCausesStackOverflowViaPublicAPI() {
+        List<Object> recursiveList = new ArrayList<>();
+        recursiveList.add(recursiveList); // self-reference
+
+        PropertyConverter.toIterator(recursiveList, ',');
+    }
+
+    @Test
+    public void testRecursiveStructureCausesStackOverflowReflection() throws Throwable {
+        Method flattenMethod = PropertyConverter.class.getDeclaredMethod("flatten", Object.class, char.class);
+        flattenMethod.setAccessible(true);
+
+        List<Object> recursiveList = new ArrayList<>();
+        recursiveList.add(recursiveList); // self-reference
+
+        try {
+            flattenMethod.invoke(null, recursiveList, ',');
+        } catch (InvocationTargetException e) {
+            // unwrap the real cause so JUnit can match it
+            throw e.getCause();
+        }
     }
 }
