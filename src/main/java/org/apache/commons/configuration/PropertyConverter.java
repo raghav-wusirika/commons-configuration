@@ -67,7 +67,7 @@ public final class PropertyConverter
     /** The fully qualified name of {@link javax.mail.internet.InternetAddress} */
     private static final String INTERNET_ADDRESS_CLASSNAME = "javax.mail.internet.InternetAddress";
 
-    private static final int MAX_FLATTEN_DEPTH = 50; // configurable max depth
+    private static final int MAX_FLATTEN_DEPTH = Integer.MAX_VALUE; // configurable max depth
 
     /**
      * Private constructor prevents instances from being created.
